@@ -1,72 +1,156 @@
 import { useState, useEffect } from 'react';
-import { doc, getDoc, onSnapshot } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, setDoc, onSnapshot } from 'firebase/firestore';
 import { auth, db } from '../firebase/config';
-import { User } from '../types';
-import { calculateLevel } from '../utils/levelSystem';
+import { onAuthStateChanged } from 'firebase/auth';
+import { calculateExperienceGain, calculateLevel } from '../utils/levelSystem';
+import { Task } from '../types';
+
+interface UserProfile {
+  uid: string;
+  email: string | null;
+  displayName: string | null;
+  level: number;
+  experience: number;
+  experienceToNextLevel: number;
+  totalTasksCompleted: number;
+  totalPointsEarned: number; // Added this field
+}
 
 const useUserProfile = () => {
-  const [userProfile, setUserProfile] = useState<User | null>(null);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [leveledUp, setLeveledUp] = useState(false);
+  const [newLevel, setNewLevel] = useState(1);
 
   useEffect(() => {
-    const unsubscribeAuth = auth.onAuthStateChanged(async (user) => {
-      if (!user) {
-        setUserProfile(null);
-        setLoading(false);
-        return;
-      }
+    let unsubscribeAuth: () => void;
+    let unsubscribeDoc: () => void;
 
-      try {
-        // Get initial user data
-        const userDoc = await getDoc(doc(db, 'users', user.uid));
-        
-        if (userDoc.exists()) {
-          // Set up real-time listener for user document
-          const unsubscribeSnapshot = onSnapshot(
-            doc(db, 'users', user.uid),
-            (snapshot) => {
-              if (snapshot.exists()) {
-                const userData = snapshot.data() as Omit<User, 'level' | 'experienceToNextLevel'>;
-                const { level, experienceToNextLevel } = calculateLevel(userData.experience);
-                
-                setUserProfile({
-                  ...userData,
-                  level,
-                  experienceToNextLevel,
-                } as User);
-              }
-              setLoading(false);
-            },
-            (err) => {
-              setError(err.message);
-              setLoading(false);
-            }
-          );
-          
-          return () => unsubscribeSnapshot();
-        } else {
-          // If user doc doesn't exist yet
-          setUserProfile({
+    unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        const userDocRef = doc(db, 'users', user.uid);
+
+        // First fetch to initialize data
+        const userDoc = await getDoc(userDocRef);
+
+        if (!userDoc.exists()) {
+          // Create initial user profile
+          const initialProfile: UserProfile = {
             uid: user.uid,
             email: user.email,
             displayName: user.displayName,
             level: 1,
             experience: 0,
             experienceToNextLevel: 100,
-          });
-          setLoading(false);
+            totalTasksCompleted: 0,
+            totalPointsEarned: 0 // Initialize total points to 0
+          };
+
+          await setDoc(userDocRef, initialProfile);
+          setUserProfile(initialProfile);
         }
-      } catch (err: any) {
-        setError(err.message);
+
+        // Set up real-time listener for profile updates
+        unsubscribeDoc = onSnapshot(userDocRef, (doc) => {
+          if (doc.exists()) {
+            const data = doc.data() as UserProfile;
+            setUserProfile({
+              ...data,
+              // Ensure totalPointsEarned exists even if it's not in DB yet
+              totalPointsEarned: data.totalPointsEarned || 0
+            });
+          }
+          setLoading(false);
+        });
+      } else {
+        setUserProfile(null);
         setLoading(false);
       }
     });
 
-    return () => unsubscribeAuth();
+    return () => {
+      if (unsubscribeAuth) unsubscribeAuth();
+      if (unsubscribeDoc) unsubscribeDoc();
+    };
   }, []);
 
-  return { userProfile, loading, error };
+  const updateExperience = async (task: Task) => {
+    if (!userProfile) return;
+
+    // Calculate experience gain based on task difficulty
+    const experienceGain = calculateExperienceGain(task.difficulty);
+
+    // Add experience to current total
+    const newExperience = userProfile.experience + experienceGain;
+
+    // Calculate new level based on total experience
+    const { level: newLevel, experienceToNextLevel } = calculateLevel(newExperience);
+
+    // Check if user leveled up
+    const didLevelUp = newLevel > userProfile.level;
+
+    // Update total points earned
+    const newTotalPoints = userProfile.totalPointsEarned + task.points;
+
+    // Create updated profile data
+    const updatedProfile = {
+      ...userProfile,
+      experience: newExperience,
+      level: newLevel,
+      experienceToNextLevel: experienceToNextLevel,
+      totalTasksCompleted: (userProfile.totalTasksCompleted || 0) + 1,
+      totalPointsEarned: newTotalPoints
+    };
+
+    // Update Firestore
+    const userDocRef = doc(db, 'users', userProfile.uid);
+    await updateDoc(userDocRef, {
+      experience: newExperience,
+      level: newLevel,
+      experienceToNextLevel: experienceToNextLevel,
+      totalTasksCompleted: updatedProfile.totalTasksCompleted,
+      totalPointsEarned: newTotalPoints
+    });
+
+    // The real-time listener will update the state automatically
+
+    // If the user leveled up, set state for potential UI feedback
+    if (didLevelUp) {
+      setLeveledUp(true);
+      setNewLevel(newLevel);
+    }
+
+    return didLevelUp;
+  };
+
+  // Clear the level up state (for after displaying level up notification)
+  const clearLevelUp = () => {
+    setLeveledUp(false);
+  };
+
+  // Legacy function for backward compatibility
+  const incrementCompletedTasks = async () => {
+    if (!userProfile) return;
+
+    const userDocRef = doc(db, 'users', userProfile.uid);
+
+    // Increment the counter in Firestore
+    await updateDoc(userDocRef, {
+      totalTasksCompleted: (userProfile.totalTasksCompleted || 0) + 1
+    });
+
+    // The real-time listener will update the state automatically
+  };
+
+  return {
+    userProfile,
+    loading,
+    incrementCompletedTasks,
+    updateExperience,
+    leveledUp,
+    newLevel,
+    clearLevelUp
+  };
 };
 
 export default useUserProfile;

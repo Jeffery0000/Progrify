@@ -16,24 +16,35 @@ export const levelThresholds: LevelThreshold[] = [
 ];
 
 // Calculate user level based on total XP
-export const calculateLevel = (experience: number): { level: number; experienceToNextLevel: number } => {
+export const calculateLevel = (experience: number): {
+  level: number;
+  experienceToNextLevel: number;
+  experienceInCurrentLevel: number;
+} => {
   let currentLevel = 1;
+  let currentLevelThreshold = 0;
   let nextLevelThreshold = 100;
-  
+
   for (let i = 0; i < levelThresholds.length; i++) {
     if (experience >= levelThresholds[i].experienceRequired) {
       currentLevel = levelThresholds[i].level;
-      nextLevelThreshold = i < levelThresholds.length - 1 
-        ? levelThresholds[i + 1].experienceRequired 
+      currentLevelThreshold = levelThresholds[i].experienceRequired;
+      nextLevelThreshold = i < levelThresholds.length - 1
+        ? levelThresholds[i + 1].experienceRequired
         : levelThresholds[i].experienceRequired + 500;
     } else {
       break;
     }
   }
-  
+
   const experienceToNextLevel = nextLevelThreshold - experience;
-  
-  return { level: currentLevel, experienceToNextLevel };
+  const experienceInCurrentLevel = experience - currentLevelThreshold;
+
+  return {
+    level: currentLevel,
+    experienceToNextLevel,
+    experienceInCurrentLevel
+  };
 };
 
 // Calculate XP gained based on task difficulty

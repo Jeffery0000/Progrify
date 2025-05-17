@@ -5,6 +5,8 @@ export interface User {
   level: number;
   experience: number;
   experienceToNextLevel: number;
+  totalTasksCompleted: number;
+  totalPointsEarned: number; // New field to track total points
 }
 
 export interface Task {
@@ -14,9 +16,10 @@ export interface Task {
   difficulty: 'easy' | 'medium' | 'hard';
   points: number;
   completed: boolean;
-  createdAt: Date;
-  completedAt: Date | null;
+  createdAt: Date | any; // to handle Firebase Timestamp
+  completedAt: Date | any | null; // to handle Firebase Timestamp
   userId: string;
+  archived: boolean;
 }
 
 export interface DailyStats {

@@ -1,243 +1,204 @@
 import { useState, useEffect } from 'react';
-import {
-  collection,
-  query,
-  orderBy,
-  onSnapshot,
-  addDoc,
-  updateDoc,
-  deleteDoc,
-  doc,
-  serverTimestamp,
-  Timestamp,
-  increment,
-  getDoc,
-  where,
-  getDocs
-} from 'firebase/firestore';
+import { collection, query, where, getDocs, addDoc, updateDoc, doc, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { auth, db } from '../firebase/config';
 import { Task } from '../types';
-import { calculatePoints, calculateExperienceGain } from '../utils/levelSystem';
-import { calculateLevel } from '../utils/levelSystem';
+
+export type TaskStatus = 'active' | 'completed' | 'archived';
 
 const useTasks = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [allTasks, setAllTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [showLevelUp, setShowLevelUp] = useState(false);
-  const [newLevel, setNewLevel] = useState(1);
+  const [allTasksLoading, setAllTasksLoading] = useState(true);
+  const [taskFilter, setTaskFilter] = useState<TaskStatus>('active');
 
-  // Add a new task
-  const addTask = async (taskData: {
-    title: string;
-    description: string;
-    difficulty: 'easy' | 'medium' | 'hard';
-  }) => {
-    try {
-      const user = auth.currentUser;
-      if (!user) throw new Error('User not authenticated');
-
-      console.log("Adding task with user:", user.uid);
-      const points = calculatePoints(taskData.difficulty);
-
-      // First, verify user document exists
-      const userDocRef = doc(db, 'users', user.uid);
-      const userDoc = await getDoc(userDocRef);
-      
-      if (!userDoc.exists()) {
-        console.error("User document doesn't exist");
-        throw new Error("User profile not found");
-      }
-
-      // Use subcollection path for tasks
-      const tasksCollectionRef = collection(userDocRef, 'tasks');
-      
-      const docRef = await addDoc(tasksCollectionRef, {
-        title: taskData.title,
-        description: taskData.description,
-        difficulty: taskData.difficulty,
-        points,
-        completed: false,
-        createdAt: serverTimestamp(),
-        completedAt: null,
-        userId: user.uid // Keep this for data integrity
-      });
-
-      console.log("Task added successfully with ID:", docRef.id);
-      return docRef.id; // Return the ID of the created task
-    } catch (err: any) {
-      console.error("Error adding task:", err);
-      setError(err.message);
-      return null;
-    }
-  };
-
-  // Mark a task as complete/incomplete and update user experience
-  const completeTask = async (task: Task) => {
-    try {
-      const user = auth.currentUser;
-      if (!user) throw new Error('User not authenticated');
-
-      // Update task reference to use subcollection path
-      const taskRef = doc(db, 'users', user.uid, 'tasks', task.id);
-      const userRef = doc(db, 'users', user.uid);
-
-      // First, check if the task document exists
-      const taskDoc = await getDoc(taskRef);
-      if (!taskDoc.exists()) {
-        throw new Error("Task document not found");
-      }
-
-      // If task is being marked as complete, add experience points
-      if (!task.completed) {
-        const expGain = calculateExperienceGain(task.difficulty);
-
-        // Get current user data to calculate if leveling up
-        const userSnap = await getDoc(userRef);
-        if (userSnap.exists()) {
-          const userData = userSnap.data();
-          const currentExp = userData.experience || 0;
-          const newExp = currentExp + expGain;
-
-          const currentLevel = calculateLevel(currentExp).level;
-          const newLevelData = calculateLevel(newExp);
-
-          // Check if user leveled up
-          if (newLevelData.level > currentLevel) {
-            setNewLevel(newLevelData.level);
-            setShowLevelUp(true);
-          }
-
-          // Update user experience
-          await updateDoc(userRef, {
-            experience: increment(expGain)
-          });
-        }
-
-        // Update task as completed
-        await updateDoc(taskRef, {
-          completed: true,
-          completedAt: serverTimestamp()
-        });
-      } else {
-        // If task is being marked as incomplete, remove experience points
-        const expGain = calculateExperienceGain(task.difficulty);
-
-        // Update user experience (decrease)
-        await updateDoc(userRef, {
-          experience: increment(-expGain)
-        });
-
-        // Update task as incomplete
-        await updateDoc(taskRef, {
-          completed: false,
-          completedAt: null
-        });
-      }
-    } catch (err: any) {
-      console.error("Error completing task:", err);
-      setError(err.message);
-    }
-  };
-
-  // Delete a task
-  const deleteTask = async (taskId: string) => {
-    try {
-      const user = auth.currentUser;
-      if (!user) throw new Error('User not authenticated');
-      
-      // Update path to task document in subcollection
-      const taskRef = doc(db, 'users', user.uid, 'tasks', taskId);
-      
-      // Check if the task exists before deletion
-      const taskDoc = await getDoc(taskRef);
-      if (!taskDoc.exists()) {
-        throw new Error("Task not found");
-      }
-      
-      await deleteDoc(taskRef);
-    } catch (err: any) {
-      console.error("Error deleting task:", err);
-      setError(err.message);
-    }
-  };
-
-  // Load tasks for the current user
+  // Fetch tasks based on the current filter
   useEffect(() => {
-    const unsubscribeAuth = auth.onAuthStateChanged((user) => {
-      if (!user) {
-        setTasks([]);
-        setLoading(false);
-        return;
+    const fetchTasks = async () => {
+      setLoading(true);
+      const user = auth.currentUser;
+
+      if (user) {
+        let q;
+
+        if (taskFilter === 'active') {
+          q = query(
+            collection(db, 'tasks'),
+            where('userId', '==', user.uid),
+            where('completed', '==', false),
+            where('archived', '==', false)
+          );
+        } else if (taskFilter === 'completed') {
+          q = query(
+            collection(db, 'tasks'),
+            where('userId', '==', user.uid),
+            where('completed', '==', true),
+            where('archived', '==', false)
+          );
+        } else {
+          q = query(
+            collection(db, 'tasks'),
+            where('userId', '==', user.uid),
+            where('archived', '==', true)
+          );
+        }
+
+        const querySnapshot = await getDocs(q);
+        const fetchedTasks: Task[] = [];
+
+        querySnapshot.forEach((doc) => {
+          const data = doc.data();
+
+          // Convert Firestore timestamps to JavaScript Date objects
+          const createdAt = data.createdAt?.toDate ? data.createdAt.toDate() : data.createdAt;
+          const completedAt = data.completedAt?.toDate ? data.completedAt.toDate() : data.completedAt;
+
+          fetchedTasks.push({
+            id: doc.id,
+            ...data,
+            createdAt,
+            completedAt
+          } as Task);
+        });
+
+        setTasks(fetchedTasks);
       }
 
-      // Update query to use subcollection path
-      const tasksCollectionRef = collection(db, 'users', user.uid, 'tasks');
-      const q = query(
-        tasksCollectionRef,
-        orderBy('createdAt', 'desc')
-      );
+      setLoading(false);
+    };
 
-      const unsubscribe = onSnapshot(
-        q,
-        (querySnapshot) => {
-          const tasksList: Task[] = [];
-          querySnapshot.forEach((doc) => {
-            const data = doc.data();
+    fetchTasks();
+  }, [taskFilter]);
 
-            // Convert Firestore Timestamp to JS Date
-            const createdAt = data.createdAt instanceof Timestamp
-              ? data.createdAt.toDate()
-              : data.createdAt;
+  // Fetch ALL tasks for statistics (regardless of status)
+  useEffect(() => {
+    const fetchAllTasks = async () => {
+      setAllTasksLoading(true);
+      const user = auth.currentUser;
 
-            const completedAt = data.completedAt instanceof Timestamp
-              ? data.completedAt.toDate()
-              : data.completedAt;
+      if (user) {
+        // Get all tasks for the current user
+        const q = query(
+          collection(db, 'tasks'),
+          where('userId', '==', user.uid)
+        );
 
-            tasksList.push({
-              id: doc.id,
-              title: data.title,
-              description: data.description,
-              difficulty: data.difficulty,
-              points: data.points,
-              completed: data.completed,
-              createdAt,
-              completedAt,
-              userId: data.userId
-            });
-          });
+        const querySnapshot = await getDocs(q);
+        const fetchedTasks: Task[] = [];
 
-          setTasks(tasksList);
-          setLoading(false);
-        },
-        (err) => {
-          console.error("Error fetching tasks:", err);
-          setError(err.message);
-          setLoading(false);
-        }
-      );
+        querySnapshot.forEach((doc) => {
+          const data = doc.data();
 
-      return () => unsubscribe();
-    });
+          // Convert Firestore timestamps to JavaScript Date objects
+          const createdAt = data.createdAt?.toDate ? data.createdAt.toDate() : data.createdAt;
+          const completedAt = data.completedAt?.toDate ? data.completedAt.toDate() : data.completedAt;
 
-    return () => unsubscribeAuth();
+          fetchedTasks.push({
+            id: doc.id,
+            ...data,
+            createdAt,
+            completedAt
+          } as Task);
+        });
+
+        setAllTasks(fetchedTasks);
+      }
+
+      setAllTasksLoading(false);
+    };
+
+    fetchAllTasks();
   }, []);
 
-  // Reset level up state
-  const closeLevelUpModal = () => {
-    setShowLevelUp(false);
+  // Change task filter
+  const changeTaskFilter = (filter: TaskStatus) => {
+    setTaskFilter(filter);
+  };
+
+  // Add a new task
+  const addTask = async (taskData: Omit<Task, 'id' | 'userId' | 'createdAt' | 'completed' | 'archived' | 'completedAt'>) => {
+    const user = auth.currentUser;
+
+    if (!user) return;
+
+    const newTask = {
+      ...taskData,
+      userId: user.uid,
+      completed: false,
+      archived: false,
+      createdAt: serverTimestamp(),
+      completedAt: null
+    };
+
+    const docRef = await addDoc(collection(db, 'tasks'), newTask);
+
+    // Use current date for UI display until server timestamp is available
+    const clientDate = new Date();
+    const taskWithId: Task = {
+      id: docRef.id,
+      ...newTask,
+      createdAt: clientDate
+    };
+
+    setTasks(prevTasks => [...prevTasks, taskWithId]);
+    setAllTasks(prevTasks => [...prevTasks, taskWithId]);
+
+    return taskWithId;
+  };
+
+  // Mark a task as complete
+  const completeTask = async (taskId: string, updateExperience?: (task: Task) => Promise<boolean | void>) => {
+    // First find the task
+    const task = tasks.find(t => t.id === taskId) || allTasks.find(t => t.id === taskId);
+    if (!task) return;
+
+    const taskRef = doc(db, 'tasks', taskId);
+    const now = new Date();
+
+    // Use Firestore timestamp for the database
+    await updateDoc(taskRef, {
+      completed: true,
+      completedAt: Timestamp.fromDate(now)
+    });
+
+    // Use JavaScript Date for the local state
+    const updatedTask = { ...task, completed: true, completedAt: now };
+
+    // Update both task lists
+    setTasks(prevTasks => prevTasks.map(t => t.id === taskId ? updatedTask : t));
+    setAllTasks(prevTasks => prevTasks.map(t => t.id === taskId ? updatedTask : t));
+
+    // Update experience if the function is provided
+    if (updateExperience) {
+      await updateExperience(updatedTask);
+    }
+  };
+
+  // Archive a task
+  const archiveTask = async (taskId: string) => {
+    const taskRef = doc(db, 'tasks', taskId);
+
+    await updateDoc(taskRef, {
+      archived: true
+    });
+
+    // Update both task lists
+    setTasks(prevTasks => prevTasks.filter(task => task.id !== taskId));
+    setAllTasks(prevTasks => prevTasks.map(task =>
+      task.id === taskId ? { ...task, archived: true } : task
+    ));
   };
 
   return {
     tasks,
+    allTasks,
     loading,
-    error,
+    allTasksLoading,
     addTask,
     completeTask,
-    deleteTask,
-    showLevelUp,
-    newLevel,
-    closeLevelUpModal
+    archiveTask,
+    taskFilter,
+    changeTaskFilter
   };
 };
 

@@ -37,20 +37,42 @@ const quotes = [
 
 const QuoteBox: React.FC = () => {
   const [currentQuote, setCurrentQuote] = useState(quotes[0]);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [isTransitioning, setIsTransitioning] = useState(false);
 
+  // Initialize with quote of the day
   useEffect(() => {
-    // Change quote every day (using random quote based on the date)
     const today = new Date().toDateString();
     const randomIndex = today.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % quotes.length;
     setCurrentQuote(quotes[randomIndex]);
+    setCurrentIndex(randomIndex);
   }, []);
 
+  // Set up quote cycling
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      setIsTransitioning(true);
+      
+      setTimeout(() => {
+        const nextIndex = (currentIndex + 1) % quotes.length;
+        setCurrentIndex(nextIndex);
+        setCurrentQuote(quotes[nextIndex]);
+        setIsTransitioning(false);
+      }, 500);
+      
+    }, 5000);
+    
+    return () => clearInterval(intervalId);
+  }, [currentIndex]);
+
   return (
-    <div className="bg-gradient-to-r from-teal-600 to-teal-700 text-white rounded-lg shadow-sm p-5">
+    <div className="bg-gradient-to-r from-teal-500 to-teal-700 text-white rounded-lg shadow-sm p-5 mt-10 md:mt-14">
       <blockquote className="relative text-lg font-medium">
-        <span className="text-4xl absolute -top-2 -left-3 text-teal-400 opacity-50">"</span>
-        <p className="relative z-10 mb-2">{currentQuote.text}</p>
-        <footer className="text-teal-200 text-sm">— {currentQuote.author}</footer>
+        <span className="text-4xl absolute -top-4 -left-3 text-teal-400 opacity-50">"</span>
+        <div className={`transition-opacity duration-500 ${isTransitioning ? 'opacity-0' : 'opacity-100'}`}>
+          <p className="relative z-10 mb-2">{currentQuote.text}</p>
+          <footer className="text-teal-200 text-sm">— {currentQuote.author}</footer>
+        </div>
       </blockquote>
     </div>
   );

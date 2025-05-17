@@ -26,33 +26,33 @@ const Header: React.FC = () => {
           <div className="flex-shrink-0">
             <h1 className="text-xl font-bold text-teal-600">Productivity Pulse</h1>
           </div>
-          
+
           <div className="hidden md:block">
             {!loading && userProfile && (
-              <LevelIndicator 
-                level={userProfile.level} 
-                experience={userProfile.experience} 
+              <LevelIndicator
+                level={userProfile.level}
+                experience={userProfile.experience}
                 experienceToNextLevel={userProfile.experienceToNextLevel}
               />
             )}
           </div>
-          
+
           <div className="flex items-center gap-3">
-            <button 
+            <button
               className="p-1.5 rounded-full text-gray-500 hover:text-gray-800 hover:bg-gray-100"
               aria-label="Notifications"
             >
               <Bell size={20} />
             </button>
-            
-            <button 
+
+            <button
               onClick={handleSignOut}
               className="p-1.5 rounded-full text-gray-500 hover:text-gray-800 hover:bg-gray-100"
               aria-label="Sign out"
             >
               <LogOut size={20} />
             </button>
-            
+
             <div className="h-8 w-8 rounded-full bg-teal-500 text-white flex items-center justify-center">
               {userProfile?.displayName?.charAt(0) || userProfile?.email?.charAt(0) || '?'}
             </div>
