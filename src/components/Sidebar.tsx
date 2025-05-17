@@ -74,7 +74,7 @@ const Sidebar: React.FC = () => {
           </nav>
           
           <div className="p-4 text-xs text-teal-100/70">
-            <p>© 2025 Productivity Pulse</p>
+            <p>© 2025 Progrify</p>
             <p className="mt-1">Your personal growth journey</p>
           </div>
         </div>

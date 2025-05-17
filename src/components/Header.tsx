@@ -21,10 +21,10 @@ const Header: React.FC = () => {
 
   return (
     <header className="bg-white shadow-sm border-b border-gray-200">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between h-16 items-center">
+      <div className="max-w-6xl mx-auto">
+        <div className="flex justify-between h-16 items-center p-4 md:p-6">
           <div className="flex-shrink-0">
-            <h1 className="text-xl font-bold text-teal-600">Productivity Pulse</h1>
+            <h1 className="text-xl font-bold text-teal-600">Progrify</h1>
           </div>
 
           <div className="hidden md:block">
@@ -42,7 +42,7 @@ const Header: React.FC = () => {
               className="p-1.5 rounded-full text-gray-500 hover:text-gray-800 hover:bg-gray-100"
               aria-label="Notifications"
             >
-              <Bell size={20} />
+              <Bell className="w-5 h-5" />
             </button>
 
             <button
@@ -50,7 +50,7 @@ const Header: React.FC = () => {
               className="p-1.5 rounded-full text-gray-500 hover:text-gray-800 hover:bg-gray-100"
               aria-label="Sign out"
             >
-              <LogOut size={20} />
+              <LogOut className="w-5 h-5" />
             </button>
 
             <div className="h-8 w-8 rounded-full bg-teal-500 text-white flex items-center justify-center">
