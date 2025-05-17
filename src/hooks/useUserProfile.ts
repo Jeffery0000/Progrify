@@ -13,7 +13,7 @@ interface UserProfile {
   experience: number;
   experienceToNextLevel: number;
   totalTasksCompleted: number;
-  totalPointsEarned: number; // Added this field
+  totalPointsEarned: number;
 }
 
 const useUserProfile = () => {
@@ -43,11 +43,21 @@ const useUserProfile = () => {
             experience: 0,
             experienceToNextLevel: 100,
             totalTasksCompleted: 0,
-            totalPointsEarned: 0 // Initialize total points to 0
+            totalPointsEarned: 0
           };
 
           await setDoc(userDocRef, initialProfile);
           setUserProfile(initialProfile);
+
+          // Also create initial leaderboard entry
+          await setDoc(doc(db, 'leaderboard', user.uid), {
+            uid: user.uid,
+            displayName: user.displayName || 'Anonymous User',
+            email: user.email,
+            level: 1,
+            totalPointsEarned: 0,
+            totalTasksCompleted: 0
+          });
         }
 
         // Set up real-time listener for profile updates
@@ -56,7 +66,6 @@ const useUserProfile = () => {
             const data = doc.data() as UserProfile;
             setUserProfile({
               ...data,
-              // Ensure totalPointsEarned exists even if it's not in DB yet
               totalPointsEarned: data.totalPointsEarned || 0
             });
           }
@@ -112,7 +121,16 @@ const useUserProfile = () => {
       totalPointsEarned: newTotalPoints
     });
 
-    // The real-time listener will update the state automatically
+    // Update leaderboard entry
+    const leaderboardRef = doc(db, 'leaderboard', userProfile.uid);
+    await setDoc(leaderboardRef, {
+      uid: userProfile.uid,
+      displayName: userProfile.displayName || 'Anonymous User',
+      email: userProfile.email,
+      level: newLevel,
+      totalPointsEarned: newTotalPoints,
+      totalTasksCompleted: updatedProfile.totalTasksCompleted
+    }, { merge: true });
 
     // If the user leveled up, set state for potential UI feedback
     if (didLevelUp) {
@@ -139,7 +157,16 @@ const useUserProfile = () => {
       totalTasksCompleted: (userProfile.totalTasksCompleted || 0) + 1
     });
 
-    // The real-time listener will update the state automatically
+    // Also update the leaderboard
+    const leaderboardRef = doc(db, 'leaderboard', userProfile.uid);
+    await setDoc(leaderboardRef, {
+      uid: userProfile.uid,
+      displayName: userProfile.displayName || 'Anonymous User',
+      email: userProfile.email,
+      level: userProfile.level,
+      totalPointsEarned: userProfile.totalPointsEarned || 0,
+      totalTasksCompleted: (userProfile.totalTasksCompleted || 0) + 1
+    }, { merge: true });
   };
 
   return {

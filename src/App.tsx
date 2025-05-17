@@ -11,6 +11,8 @@ import Stats from './pages/Stats';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import LoadingScreen from './components/LoadingScreen';
+import Leaderboard from './pages/Leaderboard';
+
 
 function App() {
   const [user, loading] = useAuthState(auth);
@@ -25,12 +27,13 @@ function App() {
         {/* Public routes */}
         <Route path="/login" element={!user ? <Login /> : <Navigate to="/" />} />
         <Route path="/register" element={!user ? <Register /> : <Navigate to="/" />} />
-        
+
         {/* Protected routes */}
         <Route path="/" element={user ? <Layout /> : <Navigate to="/login" />}>
           <Route index element={<Dashboard />} />
           <Route path="tasks" element={<Tasks />} />
           <Route path="stats" element={<Stats />} />
+          <Route path="leaderboard" element={<Leaderboard />} />
         </Route>
       </Routes>
     </Router>
