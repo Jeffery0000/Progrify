@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import {
   collection,
   query,
-  where,
   orderBy,
   onSnapshot,
   addDoc,
@@ -13,6 +12,8 @@ import {
   Timestamp,
   increment,
   getDoc,
+  where,
+  getDocs
 } from 'firebase/firestore';
 import { auth, db } from '../firebase/config';
 import { Task } from '../types';
@@ -39,7 +40,19 @@ const useTasks = () => {
       console.log("Adding task with user:", user.uid);
       const points = calculatePoints(taskData.difficulty);
 
-      const docRef = await addDoc(collection(db, 'tasks'), {
+      // First, verify user document exists
+      const userDocRef = doc(db, 'users', user.uid);
+      const userDoc = await getDoc(userDocRef);
+      
+      if (!userDoc.exists()) {
+        console.error("User document doesn't exist");
+        throw new Error("User profile not found");
+      }
+
+      // Use subcollection path for tasks
+      const tasksCollectionRef = collection(userDocRef, 'tasks');
+      
+      const docRef = await addDoc(tasksCollectionRef, {
         title: taskData.title,
         description: taskData.description,
         difficulty: taskData.difficulty,
@@ -47,7 +60,7 @@ const useTasks = () => {
         completed: false,
         createdAt: serverTimestamp(),
         completedAt: null,
-        userId: user.uid
+        userId: user.uid // Keep this for data integrity
       });
 
       console.log("Task added successfully with ID:", docRef.id);
@@ -65,8 +78,15 @@ const useTasks = () => {
       const user = auth.currentUser;
       if (!user) throw new Error('User not authenticated');
 
-      const taskRef = doc(db, 'tasks', task.id);
+      // Update task reference to use subcollection path
+      const taskRef = doc(db, 'users', user.uid, 'tasks', task.id);
       const userRef = doc(db, 'users', user.uid);
+
+      // First, check if the task document exists
+      const taskDoc = await getDoc(taskRef);
+      if (!taskDoc.exists()) {
+        throw new Error("Task document not found");
+      }
 
       // If task is being marked as complete, add experience points
       if (!task.completed) {
@@ -115,6 +135,7 @@ const useTasks = () => {
         });
       }
     } catch (err: any) {
+      console.error("Error completing task:", err);
       setError(err.message);
     }
   };
@@ -122,8 +143,21 @@ const useTasks = () => {
   // Delete a task
   const deleteTask = async (taskId: string) => {
     try {
-      await deleteDoc(doc(db, 'tasks', taskId));
+      const user = auth.currentUser;
+      if (!user) throw new Error('User not authenticated');
+      
+      // Update path to task document in subcollection
+      const taskRef = doc(db, 'users', user.uid, 'tasks', taskId);
+      
+      // Check if the task exists before deletion
+      const taskDoc = await getDoc(taskRef);
+      if (!taskDoc.exists()) {
+        throw new Error("Task not found");
+      }
+      
+      await deleteDoc(taskRef);
     } catch (err: any) {
+      console.error("Error deleting task:", err);
       setError(err.message);
     }
   };
@@ -137,9 +171,10 @@ const useTasks = () => {
         return;
       }
 
+      // Update query to use subcollection path
+      const tasksCollectionRef = collection(db, 'users', user.uid, 'tasks');
       const q = query(
-        collection(db, 'tasks'),
-        where('userId', '==', user.uid),
+        tasksCollectionRef,
         orderBy('createdAt', 'desc')
       );
 
@@ -176,6 +211,7 @@ const useTasks = () => {
           setLoading(false);
         },
         (err) => {
+          console.error("Error fetching tasks:", err);
           setError(err.message);
           setLoading(false);
         }

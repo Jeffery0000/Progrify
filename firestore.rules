@@ -4,8 +4,14 @@ service cloud.firestore {
   match /databases/{database}/documents {
     match /users/{userId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
+      
+      // Add nested rules for tasks subcollection - explicitly allow all operations
+      match /tasks/{taskId} {
+        allow read, create, update, delete: if request.auth != null && request.auth.uid == userId;
+      }
     }
     
+    // During migration, keep rules for existing top-level tasks collection
     match /tasks/{taskId} {
       allow read: if request.auth != null && resource.data.userId == request.auth.uid;
       allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
