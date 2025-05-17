@@ -1,0 +1,85 @@
+@keyframes pet-idle {
+
+    0%,
+    100% {
+        transform: translateY(0);
+    }
+
+    50% {
+        transform: translateY(-0.5rem);
+    }
+}
+
+@keyframes pet-easy {
+
+    0%,
+    100% {
+        transform: scale(1) rotate(0deg);
+    }
+
+    30% {
+        transform: scale(1.1) rotate(5deg);
+    }
+
+    60% {
+        transform: scale(1.1) rotate(-5deg);
+    }
+}
+
+@keyframes pet-medium {
+
+    0%,
+    100% {
+        transform: scale(1) rotate(0deg);
+    }
+
+    30% {
+        transform: scale(1.2) rotate(10deg);
+    }
+
+    60% {
+        transform: scale(1.2) rotate(-10deg);
+    }
+}
+
+@keyframes pet-hard {
+    0% {
+        transform: scale(1) rotate(0deg) translateY(0);
+    }
+
+    30% {
+        transform: scale(1.3) rotate(15deg) translateY(-1rem);
+    }
+
+    60% {
+        transform: scale(1.3) rotate(-15deg) translateY(-1rem);
+    }
+
+    100% {
+        transform: scale(1) rotate(0deg) translateY(0);
+    }
+}
+
+.pet-idle {
+    animation: pet-idle 2s ease-in-out infinite;
+}
+
+.pet-easy {
+    animation: pet-easy 0.6s ease-in-out;
+}
+
+.pet-medium {
+    animation: pet-medium 0.9s ease-in-out;
+}
+
+.pet-hard {
+    animation: pet-hard 1.2s ease-in-out;
+}
+
+/* Force animation to start immediately and properly */
+.pet-container {
+    transform-origin: center;
+    will-change: transform;
+    backface-visibility: hidden;
+    transform: translateZ(0);
+}

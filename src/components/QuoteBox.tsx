@@ -60,7 +60,7 @@ const QuoteBox: React.FC = () => {
         setIsTransitioning(false);
       }, 500);
       
-    }, 5000);
+    }, 10000);
     
     return () => clearInterval(intervalId);
   }, [currentIndex]);

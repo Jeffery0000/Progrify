@@ -3,6 +3,7 @@ import { Task } from '../types';
 import TaskForm from '../components/TaskForm';
 import TaskCard from '../components/TaskCard';
 import QuoteBox from '../components/QuoteBox';
+import PetDisplay from '../components/PetDisplay';
 import { Loader2 } from 'lucide-react';
 import useUserProfile from '../hooks/useUserProfile';
 import useTasks from '../hooks/useTasks';
@@ -28,6 +29,7 @@ const Dashboard: React.FC = () => {
   } = useTasks();
 
   const [recentTasks, setRecentTasks] = useState<Task[]>([]);
+  const [petAnimation, setPetAnimation] = useState<'idle' | 'easy' | 'medium' | 'hard'>('idle');
 
   useEffect(() => {
     if (tasks.length > 0) {
@@ -47,9 +49,26 @@ const Dashboard: React.FC = () => {
     }
   }, [tasks]);
 
-  // Wrapper for completeTask that uses the new updateExperience function
+  // Wrapper for completeTask that uses the updateExperience function
+  // Now also triggers pet animation based on task difficulty
   const handleCompleteTask = async (task: Task) => {
     if (!task?.id) return;
+
+    console.log(`Task completed - difficulty: ${task.difficulty}`);
+
+    // Force animation to be idle first (to ensure it can be triggered again)
+    setPetAnimation('idle');
+
+    // Small delay before triggering the animation to ensure it's applied correctly
+    setTimeout(() => {
+      setPetAnimation(task.difficulty);
+
+      // Reset animation after completion
+      setTimeout(() => {
+        setPetAnimation('idle');
+      }, 2000);
+    }, 50);
+
     await completeTask(task.id, updateExperience);
   };
 
@@ -154,28 +173,11 @@ const Dashboard: React.FC = () => {
           {/* Quote of the day */}
           <QuoteBox />
 
-          {/* Upcoming features teaser */}
-          <div className="bg-white rounded-lg shadow-sm p-5">
-            <h3 className="text-lg font-medium text-gray-800 mb-3">Coming Soon</h3>
-            <ul className="space-y-2">
-              <li className="flex items-center text-gray-600">
-                <span className="w-2 h-2 bg-amber-500 rounded-full mr-2"></span>
-                Task categories and tags
-              </li>
-              <li className="flex items-center text-gray-600">
-                <span className="w-2 h-2 bg-amber-500 rounded-full mr-2"></span>
-                Weekly productivity reports
-              </li>
-              <li className="flex items-center text-gray-600">
-                <span className="w-2 h-2 bg-amber-500 rounded-full mr-2"></span>
-                Advanced statistics and insights
-              </li>
-              <li className="flex items-center text-gray-600">
-                <span className="w-2 h-2 bg-amber-500 rounded-full mr-2"></span>
-                Productivity streaks and rewards
-              </li>
-            </ul>
-          </div>
+          {/* Pet display - replacing the "Coming Soon" section */}
+          <PetDisplay
+            level={userProfile?.level || 1}
+            animationTrigger={petAnimation}
+          />
         </div>
       </div>
     </div>
