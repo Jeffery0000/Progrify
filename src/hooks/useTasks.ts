@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { collection, query, where, getDocs, addDoc, updateDoc, doc, serverTimestamp, Timestamp } from 'firebase/firestore';
+import { collection, query, where, getDocs, addDoc, updateDoc, doc, serverTimestamp, Timestamp, getDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase/config';
 import { Task } from '../types';
 
@@ -11,6 +11,37 @@ const useTasks = () => {
   const [loading, setLoading] = useState(true);
   const [allTasksLoading, setAllTasksLoading] = useState(true);
   const [taskFilter, setTaskFilter] = useState<TaskStatus>('active');
+
+  // Helper function to safely convert any date format from Firestore to a JavaScript Date
+  const convertToDate = (dateValue: any): Date | null => {
+    if (!dateValue) return null;
+
+    try {
+      // If it's a Firestore Timestamp with toDate method
+      if (dateValue && typeof dateValue.toDate === 'function') {
+        return dateValue.toDate();
+      }
+
+      // If it's already a Date object
+      if (dateValue instanceof Date) {
+        return dateValue;
+      }
+
+      // If it's a string or number, try to convert it
+      if (typeof dateValue === 'string' || typeof dateValue === 'number') {
+        const date = new Date(dateValue);
+        if (!isNaN(date.getTime())) {
+          return date;
+        }
+      }
+
+      // If we can't convert it, return null
+      return null;
+    } catch (error) {
+      console.error("Error converting date:", error);
+      return null;
+    }
+  };
 
   // Fetch tasks based on the current filter
   useEffect(() => {
@@ -49,9 +80,9 @@ const useTasks = () => {
         querySnapshot.forEach((doc) => {
           const data = doc.data();
 
-          // Convert Firestore timestamps to JavaScript Date objects
-          const createdAt = data.createdAt?.toDate ? data.createdAt.toDate() : data.createdAt;
-          const completedAt = data.completedAt?.toDate ? data.completedAt.toDate() : data.completedAt;
+          // Convert dates using our helper function
+          const createdAt = convertToDate(data.createdAt);
+          const completedAt = convertToDate(data.completedAt);
 
           fetchedTasks.push({
             id: doc.id,
@@ -89,9 +120,9 @@ const useTasks = () => {
         querySnapshot.forEach((doc) => {
           const data = doc.data();
 
-          // Convert Firestore timestamps to JavaScript Date objects
-          const createdAt = data.createdAt?.toDate ? data.createdAt.toDate() : data.createdAt;
-          const completedAt = data.completedAt?.toDate ? data.completedAt.toDate() : data.completedAt;
+          // Convert dates using our helper function
+          const createdAt = convertToDate(data.createdAt);
+          const completedAt = convertToDate(data.completedAt);
 
           fetchedTasks.push({
             id: doc.id,
@@ -189,6 +220,117 @@ const useTasks = () => {
     ));
   };
 
+  // Update a task's completion date
+  const updateTaskCompletionDate = async (taskId: string, completionDate: Date) => {
+    // Get the current task from Firestore directly to ensure we have the latest data
+    const taskRef = doc(db, 'tasks', taskId);
+    const taskSnapshot = await getDoc(taskRef);
+
+    if (!taskSnapshot.exists()) {
+      console.error("Task does not exist:", taskId);
+      return;
+    }
+
+    const taskData = taskSnapshot.data();
+    const userId = taskData.userId;
+
+    // Make sure we preserve the userId when updating
+    await updateDoc(taskRef, {
+      completedAt: Timestamp.fromDate(completionDate),
+      completed: true, // Make sure the task is marked as completed
+      userId: userId // Explicitly set the userId again to ensure it's preserved
+    });
+
+    // Get the task from our local state
+    const task = tasks.find(t => t.id === taskId) || allTasks.find(t => t.id === taskId);
+
+    if (task) {
+      // Update local state with JavaScript Date
+      const updatedTask = {
+        ...task,
+        completed: true,
+        completedAt: completionDate,
+        userId: userId // Ensure userId is set properly in local state too
+      };
+
+      setTasks(prevTasks => prevTasks.map(t => t.id === taskId ? updatedTask : t));
+      setAllTasks(prevTasks => prevTasks.map(t => t.id === taskId ? updatedTask : t));
+    } else {
+      // If task isn't in local state, refresh our data
+      const user = auth.currentUser;
+      if (user) {
+        // Force a refresh of the tasks
+        const q = query(collection(db, 'tasks'), where('userId', '==', user.uid));
+        const querySnapshot = await getDocs(q);
+        const fetchedTasks: Task[] = [];
+
+        querySnapshot.forEach((doc) => {
+          const data = doc.data();
+          fetchedTasks.push({
+            id: doc.id,
+            ...data,
+            createdAt: convertToDate(data.createdAt),
+            completedAt: convertToDate(data.completedAt)
+          } as Task);
+        });
+
+        setAllTasks(fetchedTasks);
+
+        // Update filtered tasks based on current filter
+        const filteredTasks = fetchedTasks.filter(t => {
+          if (taskFilter === 'active') return !t.completed && !t.archived;
+          if (taskFilter === 'completed') return t.completed && !t.archived;
+          return t.archived;
+        });
+
+        setTasks(filteredTasks);
+      }
+    }
+  };
+
+  // Manually fix a task's ownership
+  const fixTaskOwnership = async (taskId: string) => {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    const taskRef = doc(db, 'tasks', taskId);
+
+    // Update the task with the current user's ID
+    await updateDoc(taskRef, {
+      userId: user.uid
+    });
+
+    // Refresh tasks to reflect changes
+    const user1 = auth.currentUser;
+    if (user1) {
+      // Force a refresh of all tasks
+      const q = query(collection(db, 'tasks'), where('userId', '==', user1.uid));
+      const querySnapshot = await getDocs(q);
+      const fetchedTasks: Task[] = [];
+
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        fetchedTasks.push({
+          id: doc.id,
+          ...data,
+          createdAt: convertToDate(data.createdAt),
+          completedAt: convertToDate(data.completedAt)
+        } as Task);
+      });
+
+      setAllTasks(fetchedTasks);
+
+      // Update filtered tasks based on current filter
+      const filteredTasks = fetchedTasks.filter(t => {
+        if (taskFilter === 'active') return !t.completed && !t.archived;
+        if (taskFilter === 'completed') return t.completed && !t.archived;
+        return t.archived;
+      });
+
+      setTasks(filteredTasks);
+    }
+  };
+
   return {
     tasks,
     allTasks,
@@ -197,6 +339,8 @@ const useTasks = () => {
     addTask,
     completeTask,
     archiveTask,
+    updateTaskCompletionDate,
+    fixTaskOwnership,
     taskFilter,
     changeTaskFilter
   };
