@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { Layout, ListTodo, BarChart2, Trophy, Menu, X } from 'lucide-react'; // Added Trophy icon
+import { Layout, ListTodo, BarChart2, Trophy, Menu, X } from 'lucide-react';
+import logoImage from '../images/logo.png';
 
 const Sidebar: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -27,8 +28,12 @@ const Sidebar: React.FC = () => {
           } md:translate-x-0 transition-transform duration-300 ease-in-out`}
       >
         <div className="flex flex-col h-full">
-          <div className="flex items-center justify-center h-16 bg-teal-800 text-white">
-            <h2 className="text-xl font-bold">Productivity Pulse</h2>
+          <div className="flex items-center justify-center h-16 bg-teal-800 text-white p-0">
+            <img
+              src={logoImage}
+              alt="Progrify Logo"
+              className="h-auto w-11/12 max-h-14"
+            />
           </div>
 
           <nav className="flex-1 px-2 py-4 space-y-1">
